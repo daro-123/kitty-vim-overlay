@@ -1,0 +1,1 @@
+from kitty_scrollback_navigator.kitten import main

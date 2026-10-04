@@ -1,0 +1,7 @@
+[tasks.test]
+description = "Run the standard-library unittest suite"
+run = "python3 -m unittest discover -s tests -v"
+
+[tasks.test-plugin]
+description = "Launch Kitty with the repository test config"
+run = "KITTY_CONFIG_DIRECTORY=\"$PWD/config\" kitty --config \"$PWD/config/kitty.conf\""
