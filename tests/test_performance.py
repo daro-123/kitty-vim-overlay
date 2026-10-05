@@ -2,9 +2,9 @@ import statistics
 import timeit
 import unittest
 
-from kitty_scrollback_navigator.model import ScrollbackModel
-from kitty_scrollback_navigator.search import SearchState
-from kitty_scrollback_navigator.snapshot import viewport_start
+from kitty_vim_overlay.model import ScrollbackModel
+from kitty_vim_overlay.search import SearchState
+from kitty_vim_overlay.snapshot import viewport_start
 
 
 def _median_seconds(function, *, number=3, repeat=5):

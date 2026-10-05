@@ -27,22 +27,22 @@ A Kitty custom-kitten overlay for Vim-style navigation, literal search, labeled 
 
 ## Key binding configuration
 
-Copy `config/bindings.example.json` to `~/.config/kitty/scrollback-navigator.json`. The JSON object maps all 23 action names to keys. It replaces the complete default map: include every action. Remove the obsolete `"accept"` entry from existing custom maps. Unknown actions, missing actions, malformed JSON, unsupported key notation, and duplicate key assignments are errors; they do not fall back to a partial map.
+Copy `config/bindings.example.json` to `~/.config/kitty/vim-overlay.json`. The JSON object maps all 23 action names to keys. It replaces the complete default map: include every action. Remove the obsolete `"accept"` entry from existing custom maps. Unknown actions, missing actions, malformed JSON, unsupported key notation, and duplicate key assignments are errors; they do not fall back to a partial map.
 
 A key is either one printable non-space character or a named key in angle brackets: `<Enter>`, `<Esc>`, `<Tab>`, `<Backspace>`, `<Delete>`, `<Up>`, `<Down>`, `<Left>`, `<Right>`, `<Home>`, `<End>`, `<PageUp>`, `<PageDown>`, `<Insert>`, or `<Space>`. Modifier keys use `<C-x>`, `<A-x>`, or `<S-x>` notation (`x` is one letter or digit). Key names are case-sensitive. For example, changing `"move_down": "j"` to `"move_down": "J"` makes `J` the only configured key for that action.
 
-Install the custom kitten by keeping `scrollback_navigator.py` and the `kitty_scrollback_navigator/` directory together. For example, from the repository root:
+Install the custom kitten by keeping `vim_overlay.py` and the `kitty_vim_overlay/` directory together. For example, from the repository root:
 
 ```sh
 mkdir -p ~/.config/kitty
-cp scrollback_navigator.py ~/.config/kitty/
-cp -r kitty_scrollback_navigator ~/.config/kitty/
+cp vim_overlay.py ~/.config/kitty/
+cp -r kitty_vim_overlay ~/.config/kitty/
 ```
 
 Add this entry mapping to `kitty.conf`:
 
 ```conf
-map alt+escape kitten /home/USER/.config/kitty/scrollback_navigator.py
+map alt+escape kitten /home/USER/.config/kitty/vim_overlay.py
 ```
 
 `mise run test-plugin` launches a separate Kitty terminal with the repository's `config/kitty.conf` loaded and uses `config/` as Kitty's config directory so the relative kitten path resolves to the checkout. `mise run test` covers the pure model and navigation behavior, not Kitty's authentication path; use `test-plugin` as the manual Kitty integration smoke.

@@ -6,7 +6,7 @@ A Python Kitty custom-kitten that navigates retained terminal scrollback with Vi
 
 ## Architecture & Data Flow
 
-`scrollback_navigator.py` delegates to `kitty_scrollback_navigator.kitten.main`, which prevents duplicate sessions with a per-Kitty-instance lock. The Kitty-facing layer captures the source window’s plain and ANSI scrollback, normalizes displayed rows, aligns the current screen with history, and constructs a local model/session and overlay UI. Movement, search, and target selection update local model state only. Accept converts the row delta into a Kitty scroll command; cancel leaves the source viewport unchanged.
+`vim_overlay.py` delegates to `kitty_vim_overlay.kitten.main`, which prevents duplicate sessions with a per-Kitty-instance lock. The Kitty-facing layer captures the source window’s plain and ANSI scrollback, normalizes displayed rows, aligns the current screen with history, and constructs a local model/session and overlay UI. Movement, search, and target selection update local model state only. Accept converts the row delta into a Kitty scroll command; cancel leaves the source viewport unchanged.
 
 Keep responsibilities separated:
 
@@ -21,7 +21,7 @@ Plain rows drive search/model coordinates; corresponding ANSI rows drive renderi
 
 ## Key Directories
 
-- `kitty_scrollback_navigator/`: runtime package; keep it alongside the root kitten entrypoint when installing.
+- `kitty_vim_overlay/`: runtime package; keep it alongside the root kitten entrypoint when installing.
 - `tests/`: standard-library unit tests and fake-adapter behavior.
 - `config/`: Kitty smoke-test configuration and the complete example key-binding map.
 
@@ -43,17 +43,17 @@ No build, lint, or formatter task is configured. Kitty’s integration path is n
 
 ## Important Files
 
-- `scrollback_navigator.py` — installable Kitty custom-kitten entrypoint facade.
-- `kitty_scrollback_navigator/kitten.py` — Kitty integration and overlay lifecycle.
-- `kitty_scrollback_navigator/model.py`, `search.py`, `snapshot.py`, `session.py` — navigation and scrollback behavior.
-- `kitty_scrollback_navigator/bindings.py`, `instance.py` — configuration and single-instance behavior.
+- `vim_overlay.py` — installable Kitty custom-kitten entrypoint facade.
+- `kitty_vim_overlay/kitten.py` — Kitty integration and overlay lifecycle.
+- `kitty_vim_overlay/model.py`, `search.py`, `snapshot.py`, `session.py` — navigation and scrollback behavior.
+- `kitty_vim_overlay/bindings.py`, `instance.py` — configuration and single-instance behavior.
 - `mise.toml` — project task definitions.
 - `config/kitty.conf` — isolated test mapping (`Alt+Esc`) and scrollback limit.
 - `README.md` — setup, bindings, runtime caveats, and smoke-test workflow.
 
 ## Runtime/Tooling Preferences
 
-Use Python 3 (`python3`) and Mise for the configured tasks. Tests use only `unittest`; no Python dependency/package manifest or lockfile is present. Kitty is needed to run the overlay; the documented compatibility smoke was on Kitty 0.43.1/Linux, and other versions/platforms are unverified. Alternate-screen applications do not expose primary scrollback to the navigator. Keep the launcher script and package directory together when installing (`README.md`).
+Use Python 3 (`python3`) and Mise for the configured tasks. Tests use only `unittest`; no Python dependency/package manifest or lockfile is present. Kitty is needed to run the overlay; the documented compatibility smoke was on Kitty 0.43.1/Linux, and other versions/platforms are unverified. Alternate-screen applications do not expose primary scrollback to the overlay. Keep the launcher script and package directory together when installing (`README.md`).
 
 ## Testing & QA
 

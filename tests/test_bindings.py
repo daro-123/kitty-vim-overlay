@@ -2,7 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from kitty_scrollback_navigator.bindings import (
+from kitty_vim_overlay.bindings import (
     DEFAULT_BINDINGS,
     BindingError,
     action_for_key,

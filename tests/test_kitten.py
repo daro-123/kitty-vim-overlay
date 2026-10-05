@@ -1,7 +1,7 @@
 import unittest
 
-from kitty_scrollback_navigator.model import ScrollbackModel
-from kitty_scrollback_navigator.snapshot import (
+from kitty_vim_overlay.model import ScrollbackModel
+from kitty_vim_overlay.snapshot import (
     clip_ansi,
     displayed_rows,
     flash_ansi_line,

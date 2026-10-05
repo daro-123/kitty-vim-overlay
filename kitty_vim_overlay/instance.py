@@ -9,16 +9,16 @@ from typing import Iterator
 
 
 @contextmanager
-def navigator_instance_lock(
+def overlay_instance_lock(
     kitty_pid: int, runtime_directory: str | os.PathLike[str] | None = None
 ) -> Iterator[bool]:
-    """Acquire a non-blocking lock so only one navigator runs per Kitty instance."""
+    """Acquire a non-blocking lock so only one Vim overlay runs per Kitty instance."""
     directory = Path(
         runtime_directory
         or os.environ.get("XDG_RUNTIME_DIR")
         or tempfile.gettempdir()
     )
-    lock_path = directory / f"kitty-scrollback-navigator-{kitty_pid}.lock"
+    lock_path = directory / f"kitty-vim-overlay-{kitty_pid}.lock"
     descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
     lock_file = os.fdopen(descriptor, "r+")
     acquired = False

@@ -10,7 +10,7 @@ from kittens.tui.handler import Handler, kitten_ui
 from kittens.tui.loop import EventType, Loop
 
 from .bindings import action_for_key, load_bindings_file
-from .instance import navigator_instance_lock
+from .instance import overlay_instance_lock
 from .model import ScrollbackModel
 from .search import JumpSession, JumpTarget, SearchState
 from .snapshot import (
@@ -69,7 +69,7 @@ class KittyAdapter:
 
 
 
-class NavigatorUI(Handler):
+class VimOverlayUI(Handler):
     def __init__(
         self,
         model: ScrollbackModel,
@@ -717,7 +717,7 @@ def _remote_text() -> tuple[
 
 @kitten_ui(allow_remote_control=True)
 def main(args: list[str]) -> str:
-    with navigator_instance_lock(int(os.environ["KITTY_PID"])) as acquired:
+    with overlay_instance_lock(int(os.environ["KITTY_PID"])) as acquired:
         if not acquired:
             return "already-active"
         (
@@ -732,7 +732,7 @@ def main(args: list[str]) -> str:
             viewport_height=viewport_height,
             row=initial_row,
         )
-        ui = NavigatorUI(
+        ui = VimOverlayUI(
             model,
             render_lines,
             "Alternate-screen history is unavailable; press Esc to close"

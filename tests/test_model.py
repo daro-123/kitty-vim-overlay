@@ -1,6 +1,6 @@
 import unittest
 
-from kitty_scrollback_navigator.model import ScrollbackModel
+from kitty_vim_overlay.model import ScrollbackModel
 
 
 class ScrollbackMovementTests(unittest.TestCase):

@@ -1,7 +1,7 @@
 import unittest
 
-from kitty_scrollback_navigator.model import ScrollbackModel
-from kitty_scrollback_navigator.search import JumpSession, SearchState
+from kitty_vim_overlay.model import ScrollbackModel
+from kitty_vim_overlay.search import JumpSession, SearchState
 
 
 class SearchAndJumpTests(unittest.TestCase):

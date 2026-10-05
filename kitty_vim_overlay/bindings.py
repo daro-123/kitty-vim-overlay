@@ -95,7 +95,7 @@ def _valid_key(key: str) -> bool:
     return name in _SPECIAL_KEYS or _MODIFIED_KEY.fullmatch(key) is not None
 
 def load_bindings_file(path: str | Path | None = None) -> dict[str, str]:
-    config = Path(path) if path is not None else Path.home() / ".config/kitty/scrollback-navigator.json"
+    config = Path(path) if path is not None else Path.home() / ".config/kitty/vim-overlay.json"
     try:
         source = config.read_text(encoding="utf-8")
     except FileNotFoundError:
