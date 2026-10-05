@@ -16,7 +16,6 @@ from .search import JumpSession, JumpTarget, SearchState
 from .snapshot import (
     clip_ansi,
     flash_ansi_line,
-    highlight_ansi_column,
     highlight_ansi_matches,
     highlight_ansi_range,
     last_nonempty_row,
@@ -37,9 +36,6 @@ _PAGE_ACTIONS = (
     ("page_up", "page_up"),
     ("page_down", "page_down"),
 )
-
-_JUMP_TRAIL_LENGTHS = (1, 2, 3, 4, 3, 2, 1)
-
 
 def _windows(tree: list[dict]) -> list[dict]:
     return [
@@ -96,10 +92,6 @@ class VimOverlayUI(Handler):
         self.selection_type: str | None = None
         self.selection_column: int | None = None
         self.pending_go: str | None = None
-        self.jump_animation_position: tuple[int, int] | None = None
-        self.jump_animation_frame: int | None = None
-        self.jump_animation_trail: tuple[tuple[int, int], ...] = ()
-        self.jump_animation_handle = None
 
     def initialize(self) -> None:
         self._draw()
@@ -168,21 +160,7 @@ class VimOverlayUI(Handler):
             selection_start, selection_end = sorted(
                 (self.selection_anchor, (self.model.row, endpoint_column))
             )
-        trail_columns_by_row: dict[int, list[int]] = {}
-        trail_tip: tuple[int, int] | None = None
-        if (
-            not flash_active
-            and self.jump_animation_frame is not None
-            and self.jump_animation_trail
-        ):
-            trail_length = min(
-                _JUMP_TRAIL_LENGTHS[self.jump_animation_frame],
-                len(self.jump_animation_trail),
-            )
-            trail_positions = self.jump_animation_trail[-trail_length:]
-            trail_tip = trail_positions[-1]
-            for trail_row, column in trail_positions:
-                trail_columns_by_row.setdefault(trail_row, []).append(column)
+
         for row in range(first, min(len(self.model.lines), first + visible)):
             row_targets = targets_by_row.get(row, ())
             line = self.render_lines[row]
@@ -242,45 +220,16 @@ class VimOverlayUI(Handler):
                     end_column = -1
                 if selected_row:
                     line = highlight_ansi_range(line, start_column, end_column)
-                trail_columns = trail_columns_by_row.get(row)
-                if trail_columns:
-                    older_columns = tuple(
-                        column
-                        for column in trail_columns
-                        if trail_tip != (row, column)
-                    )
-                    if older_columns:
-                        line = highlight_ansi_matches(
-                            line, older_columns, 1, None
-                        )
-                    if trail_tip is not None and trail_tip[0] == row:
-                        line = highlight_ansi_matches(
-                            line, (trail_tip[1],), 1, trail_tip[1]
-                        )
-                if row == self.model.row:
-                    cursor_column = min(
-                        self.model.column,
-                        max(0, len(self.model.lines[row]) - 1),
-                    )
-                    if (
-                        self.jump_animation_position == (
-                            row,
-                            self.model.column,
-                        )
-                        and self.jump_animation_frame is not None
-                    ):
-                        line = highlight_ansi_matches(
-                            line, (cursor_column,), 1, cursor_column
-                        )
-                    elif current_match != (row, self.model.column):
-                        line = highlight_ansi_column(line, cursor_column)
-            line = clip_ansi(line, width - len(prefix))
+
             self.print("\x1b[0m" + prefix + line + "\x1b[0m")
         footer = message or (
             "Esc/q exit · / ? search · s/S target · "
             "v/V/C-v select · y copy"
         )
         self.write(footer[:width])
+        cursor_row = self.model.row - first + 1
+        cursor_column = min(self.model.column, width - 1) + 1
+        self.write(f"\x1b[{cursor_row};{cursor_column}H\x1b[?25h")
 
     def on_text(self, text: str, in_bracketed_paste: bool = False) -> None:
         for char in text:
@@ -290,10 +239,7 @@ class VimOverlayUI(Handler):
                 self._draw()
             elif self.mode == "jump_label":
                 self.query += char
-                origin = (self.model.row, self.model.column)
                 result = self.jump.input_label(self.query)
-                if result == "selected":
-                    self._animate_cursor_jump(origin)
                 if result == "selected":
                     self.mode = "normal"
                     self.query = ""
@@ -325,9 +271,7 @@ class VimOverlayUI(Handler):
         if pending is not None:
             self.status = ""
             if key == pending:
-                origin = (self.model.row, self.model.column)
                 self.model.move("gg" if key == "g" else "GG")
-                self._animate_cursor_jump(origin)
                 self._draw()
                 return
         if key in ("g", "G"):
@@ -405,51 +349,7 @@ class VimOverlayUI(Handler):
     def on_interrupt(self) -> None:
         self._cancel()
 
-    def _animate_cursor_jump(self, origin: tuple[int, int]) -> None:
-        destination = (self.model.row, self.model.column)
-        if destination == origin or not hasattr(self, "_tui_loop"):
-            return
-        self._cancel_cursor_animation()
-        row_delta = destination[0] - origin[0]
-        column_delta = destination[1] - origin[1]
-        steps = max(abs(row_delta), abs(column_delta))
-        trail_length = min(max(_JUMP_TRAIL_LENGTHS), steps)
-        self.jump_animation_trail = tuple(
-            (
-                round(origin[0] + row_delta * step / steps),
-                round(origin[1] + column_delta * step / steps),
-            )
-            for step in range(steps - trail_length, steps)
-        )
-        self.jump_animation_position = destination
-        self.jump_animation_frame = 0
-        self.jump_animation_handle = self.asyncio_loop.call_later(
-            0.08, self._advance_cursor_animation
-        )
-
-    def _advance_cursor_animation(self) -> None:
-        if self.jump_animation_frame is None:
-            return
-        if self.jump_animation_frame >= len(_JUMP_TRAIL_LENGTHS) - 1:
-            self._cancel_cursor_animation()
-        else:
-            self.jump_animation_frame += 1
-        self._draw()
-        if self.jump_animation_frame is not None:
-            self.jump_animation_handle = self.asyncio_loop.call_later(
-                0.08, self._advance_cursor_animation
-            )
-
-    def _cancel_cursor_animation(self) -> None:
-        if self.jump_animation_handle is not None:
-            self.jump_animation_handle.cancel()
-        self.jump_animation_handle = None
-        self.jump_animation_position = None
-        self.jump_animation_trail = ()
-        self.jump_animation_frame = None
-
     def finalize(self) -> None:
-        self._cancel_cursor_animation()
         self.write("\x1b[?25h")
 
     def _dispatch_key(self, key: str) -> None:
@@ -459,7 +359,7 @@ class VimOverlayUI(Handler):
         action = action_for_key(key, self.bindings)
         if action is None:
             return
-        self._cancel_cursor_animation()
+
         movement = {
             "move_left": "h",
             "move_down": "j",
@@ -475,7 +375,6 @@ class VimOverlayUI(Handler):
             "half_page_up": "<C-u>",
         }
         if action in movement:
-            origin = (self.model.row, self.model.column)
             if self.mode == "visual" and self.selection_type == "block":
                 if action in ("move_up", "move_down"):
                     desired_column = (
@@ -509,22 +408,6 @@ class VimOverlayUI(Handler):
             else:
                 self.model.move(movement[action])
             self.status = ""
-            viewport_scroll = (
-                self.viewport_first is not None
-                and self.visible_rows > 0
-                and not (
-                    self.viewport_first
-                    <= self.model.row
-                    < self.viewport_first + self.visible_rows
-                )
-            )
-            if action in (
-                "page_down",
-                "page_up",
-                "half_page_down",
-                "half_page_up",
-            ) or viewport_scroll:
-                self._animate_cursor_jump(origin)
         elif action in ("search_forward", "search_backward"):
             self.selection_anchor = None
             self.selection_type = None
@@ -533,14 +416,12 @@ class VimOverlayUI(Handler):
             self.query = ""
             self.status = "Enter search text, then press Enter"
         elif action in ("repeat_search", "reverse_search"):
-            origin = (self.model.row, self.model.column)
             direction = "backward" if action == "reverse_search" else "forward"
             if not self.search.repeat(direction):
                 self.status = (
                     "No previous search" if self.search.query is None else "No search match"
                 )
             else:
-                self._animate_cursor_jump(origin)
                 self.status = ""
         elif action == "jump_character":
             self.selection_anchor = None
@@ -620,7 +501,6 @@ class VimOverlayUI(Handler):
 
     def _submit(self) -> None:
         if self.mode in ("search_forward", "search_backward"):
-            origin = (self.model.row, self.model.column)
             if not self.query:
                 self.status = "Search text cannot be empty"
             elif self.search.search(
@@ -628,7 +508,6 @@ class VimOverlayUI(Handler):
                 "forward" if self.mode == "search_forward" else "backward",
                 case_sensitive=False,
             ):
-                self._animate_cursor_jump(origin)
                 self.status = ""
             else:
                 self.status = "No search match"
