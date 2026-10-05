@@ -20,6 +20,8 @@ from .snapshot import (
     highlight_ansi_column,
     highlight_ansi_matches,
     highlight_ansi_range,
+    last_nonempty_row,
+    pad_history_to_viewport,
     styled_displayed_rows,
     viewport_first_row,
     viewport_start,
@@ -87,6 +89,8 @@ class NavigatorUI(Handler):
         if len(render_lines) != len(self.model.lines):
             raise ValueError("render rows must match the scrollback model")
         self.render_lines = render_lines
+        self._search_display_key: tuple[str, int, int] | None = None
+        self._search_columns_by_row: dict[int, tuple[int, ...]] = {}
         self.search = SearchState(self.model)
         self.jump = JumpSession(self.model)
         self.targets = ()
@@ -115,7 +119,7 @@ class NavigatorUI(Handler):
     def _draw(self) -> None:
         width = max(1, self.screen_size.cols)
         height = max(1, self.screen_size.rows)
-        self.write("\x1b[0m\x1b[H\x1b[2J")
+        self.write("\x1b[?25l\x1b[0m\x1b[H\x1b[2J")
         if self.mode == "visual":
             visual_type = self.selection_type or "character"
             message = (
@@ -138,25 +142,32 @@ class NavigatorUI(Handler):
         self.viewport_first = first
         self.visible_rows = visible
         flash_active = (
-            self.mode == "jump_character" or self.flash_character is not None
+            self.mode == "jump_character"
+            or self.flash_character is not None
+            or (self.mode == "jump_label" and bool(self.targets))
         )
         targets_by_row: dict[int, list[JumpTarget]] = {}
         for target in self.targets:
             targets_by_row.setdefault(target.row, []).append(target)
         searching = self.mode in ("search_forward", "search_backward")
         search_query = self.query if searching else self.search.query or ""
-        if searching:
-            search_matches = self.search.match_positions(
-                search_query,
-                case_sensitive=False,
-            )
-            current_match = None
-        else:
-            search_matches = self.search.matches
-            current_match = self.search.current_match
-        search_columns_by_row: dict[int, list[int]] = {}
-        for match_row, column in search_matches:
-            search_columns_by_row.setdefault(match_row, []).append(column)
+        search_display_key = (search_query, first, visible)
+        if search_display_key != self._search_display_key:
+            columns_by_row: dict[int, list[int]] = {}
+            if search_query:
+                visible_end = min(len(self.model.lines), first + visible)
+                for match_row, column in self.search.match_positions(
+                    search_query,
+                    case_sensitive=False,
+                    rows=range(first, visible_end),
+                ):
+                    columns_by_row.setdefault(match_row, []).append(column)
+            self._search_columns_by_row = {
+                row: tuple(columns) for row, columns in columns_by_row.items()
+            }
+            self._search_display_key = search_display_key
+        search_columns_by_row = self._search_columns_by_row
+        current_match = None if searching else self.search.current_match
         selection_start: tuple[int, int] | None = None
         selection_end: tuple[int, int] | None = None
         if self.selection_anchor is not None:
@@ -190,11 +201,14 @@ class NavigatorUI(Handler):
                 labels_by_column = {
                     target.column: target.label for target in row_targets
                 }
-                line = flash_ansi_line(line, labels_by_column)
+                line = flash_ansi_line(
+                    line,
+                    labels_by_column,
+                    label_offset=1 if self.flash_character is not None else 0,
+                )
                 prefix = ""
             else:
-                labels = " ".join(target.label for target in row_targets)
-                prefix = (f"[{labels}] " if labels else "")[:width]
+                prefix = ""
                 row_search_columns = search_columns_by_row.get(row, ())
                 if row_search_columns:
                     line = highlight_ansi_matches(
@@ -449,6 +463,7 @@ class NavigatorUI(Handler):
 
     def finalize(self) -> None:
         self._cancel_cursor_animation()
+        self.write("\x1b[?25h")
 
     def _dispatch_key(self, key: str) -> None:
         if key == "q":
@@ -696,7 +711,7 @@ def _kitty_shortcut(key: str) -> str | None:
 
 
 def _remote_text() -> tuple[
-    int, KittyAdapter, tuple[str, ...], tuple[str, ...], tuple[str, ...], bool, int
+    int, KittyAdapter, tuple[str, ...], tuple[str, ...], bool, int, int, int
 ]:
     result = main.remote_control(
         ["ls", "--match=state:overlay_parent"], capture_output=True, check=True
@@ -706,6 +721,7 @@ def _remote_text() -> tuple[
         raise RuntimeError("Could not identify the Kitty window under this overlay")
     source = windows[0]
     window_id = int(source["id"])
+    viewport_height = int(source["lines"])
     adapter = KittyAdapter(main.remote_control, window_id)
     history_pairs = styled_displayed_rows(adapter.get_text("all", ansi=True))
     screen_pairs = styled_displayed_rows(adapter.get_text("screen", ansi=True))
@@ -713,14 +729,20 @@ def _remote_text() -> tuple[
     render_lines = tuple(styled for _, styled in history_pairs)
     screen = tuple(plain for plain, _ in screen_pairs)
     first_visible = viewport_start(history, screen)
+    initial_row = first_visible + last_nonempty_row(screen)
+    history = pad_history_to_viewport(history, first_visible, viewport_height)
+    render_lines = pad_history_to_viewport(
+        render_lines, first_visible, viewport_height
+    )
     return (
         window_id,
         adapter,
         history,
         render_lines,
-        screen,
         bool(source.get("in_alternate_screen", False)),
         first_visible,
+        initial_row,
+        viewport_height,
     )
 
 
@@ -729,14 +751,21 @@ def main(args: list[str]) -> str:
     with navigator_instance_lock(int(os.environ["KITTY_PID"])) as acquired:
         if not acquired:
             return "already-active"
-        window_id, adapter, history, render_lines, screen, alternate, first_visible = (
-            _remote_text()
-        )
-        bottom_row = first_visible + len(screen) - 1
+        (
+            window_id,
+            adapter,
+            history,
+            render_lines,
+            alternate,
+            first_visible,
+            initial_row,
+            viewport_height,
+        ) = _remote_text()
+        bottom_row = first_visible + viewport_height - 1
         model = ScrollbackModel(
             history,
-            viewport_height=len(screen),
-            row=bottom_row,
+            viewport_height=viewport_height,
+            row=initial_row,
         )
         session = ScrollbackSession(
             adapter,

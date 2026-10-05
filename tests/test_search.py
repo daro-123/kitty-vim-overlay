@@ -27,6 +27,14 @@ class SearchAndJumpTests(unittest.TestCase):
         self.assertEqual(search.matches, ((0, 0), (0, 4), (2, 0)))
         self.assertEqual(search.current_match, (0, 4))
 
+
+    def test_match_positions_can_be_limited_to_visible_rows(self):
+        search = SearchState(self.make_model(("hit", "noise", "HIT", "hit")))
+
+        self.assertEqual(
+            search.match_positions("hit", rows=range(1, 4)),
+            ((2, 0), (3, 0)),
+        )
     def test_forward_search_is_case_insensitive_by_default(self):
         search = SearchState(self.make_model(("ERROR",)))
         self.assertTrue(search.search("error", "forward"))
@@ -75,6 +83,17 @@ class SearchAndJumpTests(unittest.TestCase):
         self.assertTrue(search.repeat("forward"))
         self.assertEqual(model.row, 2)
 
+
+    def test_repeat_uses_strict_column_boundaries_with_multiple_matches_per_row(self):
+        model = self.make_model(("x x x",))
+        search = SearchState(model)
+
+        self.assertTrue(search.search("x", "forward"))
+        self.assertEqual((model.row, model.column), (0, 2))
+        self.assertTrue(search.repeat("backward"))
+        self.assertEqual((model.row, model.column), (0, 0))
+        self.assertTrue(search.repeat("backward"))
+        self.assertEqual((model.row, model.column), (0, 4))
     def test_repeat_starts_from_the_current_cursor_after_manual_motion(self):
         model = self.make_model(("hit", "hit", "hit"))
         search = SearchState(model)
@@ -103,6 +122,14 @@ class SearchAndJumpTests(unittest.TestCase):
         self.assertEqual(jump.input_label(targets[-1].label), "selected")
         self.assertEqual((model.row, model.column), (2, 5))
 
+
+    def test_line_targets_exclude_trailing_blank_rows(self):
+        model = self.make_model(("first", "last", "", ""))
+        jump = JumpSession(model)
+
+        targets = jump.line_targets(range(4))
+
+        self.assertEqual([target.row for target in targets], [0, 1])
     def test_line_labels_are_limited_to_displayed_rows_and_jump_in_place(self):
         model = self.make_model(tuple(f"row {index}" for index in range(50)), row=20)
         jump = JumpSession(model)

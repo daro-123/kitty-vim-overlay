@@ -34,6 +34,24 @@ class ScrollbackMovementTests(unittest.TestCase):
         model.move("b")
         self.assertEqual((model.row, model.column), (0, 4))
 
+    def test_movement_stops_at_last_nonblank_row_but_keeps_internal_blank_rows(self):
+        model = self.make_model(("first", "", "last", "", ""), row=1)
+
+        model.move("j")
+        self.assertEqual(model.row, 2)
+        model.move("j")
+        self.assertEqual(model.row, 2)
+        model.move("GG")
+        self.assertEqual(model.row, 2)
+
+        model.move("gg")
+        model.move("<C-f>")
+        self.assertEqual(model.row, 2)
+
+    def test_initial_cursor_is_clamped_out_of_trailing_blank_rows(self):
+        model = self.make_model(("first", "last", "", ""), row=3)
+        self.assertEqual(model.row, 1)
+
     def test_gg_and_GG_jump_to_first_and_last_displayed_rows(self):
         model = self.make_model(("top", "middle", "bottom"), row=1, column=4)
 

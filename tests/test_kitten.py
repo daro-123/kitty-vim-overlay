@@ -1,5 +1,6 @@
 import unittest
 
+from kitty_scrollback_navigator.model import ScrollbackModel
 from kitty_scrollback_navigator.snapshot import (
     clip_ansi,
     displayed_rows,
@@ -7,6 +8,8 @@ from kitty_scrollback_navigator.snapshot import (
     highlight_ansi_column,
     highlight_ansi_matches,
     highlight_ansi_range,
+    last_nonempty_row,
+    pad_history_to_viewport,
     strip_ansi,
     styled_displayed_rows,
     viewport_first_row,
@@ -24,6 +27,13 @@ class DisplayRowTests(unittest.TestCase):
     def test_viewport_alignment_uses_last_matching_history_segment(self):
         history = ("old", "a", "b", "a", "b")
         self.assertEqual(viewport_start(history, ("a", "b")), 3)
+
+    def test_viewport_alignment_returns_end_for_empty_screen(self):
+        self.assertEqual(viewport_start(("old", "current"), ()), 2)
+
+    def test_viewport_alignment_rejects_screen_longer_than_history(self):
+        with self.assertRaisesRegex(ValueError, "longer"):
+            viewport_start(("only row",), ("row one", "row two"))
 
     def test_viewport_alignment_fails_when_screen_text_is_not_in_history(self):
         with self.assertRaisesRegex(ValueError, "align"):
@@ -77,15 +87,30 @@ class DisplayRowTests(unittest.TestCase):
     def test_ansi_clipping_does_not_split_control_sequences(self):
         self.assertEqual(clip_ansi("\x1b[34mred\x1b[39m", 2), "\x1b[34mre\x1b[0m")
 
-    def test_flash_dims_text_and_highlights_a_match_with_its_label(self):
-        rendered = flash_ansi_line("\x1b[34mtext\x1b[39m", {0: "a"})
-        self.assertEqual(strip_ansi(rendered), "t[a]ext")
+    def test_cursor_is_visible_on_an_empty_viewport_row(self):
+        self.assertEqual(
+            highlight_ansi_column("", 0),
+            "\x1b[7m \x1b[27m",
+        )
+
+    def test_flash_overlays_label_after_target_without_hiding_target(self):
+        rendered = flash_ansi_line("\x1b[34mabcdef\x1b[39m", {1: "a"})
+        self.assertEqual(strip_ansi(rendered), "ab[a]f")
+        self.assertEqual(len(strip_ansi(rendered)), len("abcdef"))
         self.assertIn("\x1b[38;2;160;160;160m", rendered)
         self.assertIn("\x1b[38;2;30;30;30;48;2;255;193;7m", rendered)
-        self.assertIn(
-            "t[a]\x1b[0m\x1b[38;2;160;160;160mext",
-            rendered,
-        )
+
+    def test_flash_overlay_extends_right_of_target_into_blank_row_end(self):
+        rendered = flash_ansi_line("text", {3: "b"})
+        self.assertEqual(strip_ansi(rendered), "text[b]")
+
+    def test_line_labels_overlay_at_the_target_column_without_character_offset(self):
+        rendered = flash_ansi_line("abcdef", {1: "a"}, label_offset=0)
+        self.assertEqual(strip_ansi(rendered), "a[a]ef")
+
+    def test_flash_overlays_preserve_adjacent_target_characters(self):
+        rendered = flash_ansi_line("aabcdefg", {0: "a", 1: "s"})
+        self.assertEqual(strip_ansi(rendered), "aa[a][s]")
 
 class ViewportLayoutTests(unittest.TestCase):
     def test_selection_inside_displayed_rows_keeps_viewport_fixed(self):
@@ -99,6 +124,17 @@ class ViewportLayoutTests(unittest.TestCase):
             viewport_first_row(20, 50, 10, previous_first=10, previous_visible=10),
             11,
         )
+
+    def test_initial_cursor_targets_last_nonempty_row_not_viewport_bottom(self):
+        screen = ("files", "prompt", "", "", "")
+        history = pad_history_to_viewport(screen, 0, 6)
+        initial_row = last_nonempty_row(screen)
+        model = ScrollbackModel(history, viewport_height=6, row=initial_row)
+
+        model.move("k")
+
+        self.assertEqual(initial_row, 1)
+        self.assertEqual(model.row, 0)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 
 from .model import ScrollbackModel
@@ -34,7 +36,11 @@ class SearchState:
         return self._find_from((self.model.row, self.model.column), direction)
 
     def match_positions(
-        self, query: str, *, case_sensitive: bool = False
+        self,
+        query: str,
+        *,
+        case_sensitive: bool = False,
+        rows: range | None = None,
     ) -> tuple[tuple[int, int], ...]:
         if not query:
             return ()
@@ -42,7 +48,11 @@ class SearchState:
             None if case_sensitive else re.compile(re.escape(query), re.IGNORECASE)
         )
         positions = []
-        for row, line in enumerate(self.model.lines):
+        row_indices = range(len(self.model.lines)) if rows is None else rows
+        for row in row_indices:
+            if not 0 <= row < len(self.model.lines):
+                continue
+            line = self.model.lines[row]
             start = 0
             while start <= len(line) - len(query):
                 if pattern is None:
@@ -67,15 +77,13 @@ class SearchState:
         if not self.matches:
             return False
         if direction == "forward":
-            target = next(
-                (match for match in self.matches if match > origin),
-                self.matches[0],
+            index = bisect_right(self.matches, origin)
+            target = (
+                self.matches[index] if index < len(self.matches) else self.matches[0]
             )
         else:
-            target = next(
-                (match for match in reversed(self.matches) if match < origin),
-                self.matches[-1],
-            )
+            index = bisect_left(self.matches, origin) - 1
+            target = self.matches[index] if index >= 0 else self.matches[-1]
         self.current_match = target
         self.model.row, self.model.column = target
         return True
@@ -117,7 +125,7 @@ class JumpSession:
         positions = (
             (row, 0)
             for row in rows
-            if 0 <= row < len(self.model.lines)
+            if 0 <= row <= self.model.last_nonblank_row
         )
         self._targets = self._labeled_targets(positions)
         return tuple(self._targets.values())

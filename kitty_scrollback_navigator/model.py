@@ -18,7 +18,15 @@ class ScrollbackModel:
             raise ValueError("scrollback must contain at least one displayed row")
         self.lines = tuple(lines)
         self.viewport_height = viewport_height
-        self.row = min(max(row, 0), len(self.lines) - 1)
+        self.last_nonblank_row = next(
+            (
+                row
+                for row in range(len(self.lines) - 1, -1, -1)
+                if self.lines[row].strip()
+            ),
+            len(self.lines) - 1,
+        )
+        self.row = min(max(row, 0), self.last_nonblank_row)
         self.column = self._clamp_column(self.row, column)
 
     @property
@@ -90,7 +98,7 @@ class ScrollbackModel:
         )
 
     def _set_row(self, row: int) -> None:
-        self.row = min(max(row, 0), len(self.lines) - 1)
+        self.row = min(max(row, 0), self.last_nonblank_row)
         self.column = self._clamp_column(self.row, self.column)
 
     def _clamp_column(self, row: int, column: int) -> int:
