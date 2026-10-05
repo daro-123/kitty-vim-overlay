@@ -28,7 +28,6 @@ DEFAULT_BINDINGS = {
     "visual_line_mode": "V",
     "visual_block_mode": "<C-v>",
     "yank_selection": "y",
-    "accept": "<Enter>",
     "cancel": "<Esc>",
 }
 

@@ -18,11 +18,12 @@ class BindingConfigurationTests(unittest.TestCase):
             "word_forward", "word_backward", "line_start", "line_end",
             "page_down", "page_up", "half_page_down", "half_page_up",
             "search_forward", "search_backward", "repeat_search",
-            "reverse_search", "jump_character", "jump_line", "accept", "cancel",
+            "reverse_search", "jump_character", "jump_line", "cancel",
             "visual_mode", "visual_line_mode", "visual_block_mode",
             "yank_selection",
         }
         self.assertEqual(set(DEFAULT_BINDINGS), expected_actions)
+        self.assertNotIn("<Enter>", DEFAULT_BINDINGS.values())
 
     def test_visual_selection_defaults_to_v_and_y(self):
         self.assertEqual(DEFAULT_BINDINGS["visual_mode"], "v")

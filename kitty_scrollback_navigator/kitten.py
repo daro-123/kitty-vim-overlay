@@ -13,7 +13,6 @@ from .bindings import action_for_key, load_bindings_file
 from .instance import navigator_instance_lock
 from .model import ScrollbackModel
 from .search import JumpSession, JumpTarget, SearchState
-from .session import ScrollbackSession
 from .snapshot import (
     clip_ansi,
     flash_ansi_line,
@@ -68,24 +67,16 @@ class KittyAdapter:
         result = self.remote_control(command, capture_output=True, check=True)
         return result.stdout.decode("utf-8")
 
-    def scroll_window(self, window_id: int, amount: str) -> None:
-        if window_id != self.window_id:
-            raise ValueError("refusing to scroll a window other than the captured source")
-        self.remote_control(
-            ["scroll-window", f"--match=id:{self.window_id}", amount],
-            check=True,
-        )
 
 
 class NavigatorUI(Handler):
     def __init__(
         self,
-        session: ScrollbackSession,
+        model: ScrollbackModel,
         render_lines: tuple[str, ...],
         unavailable_reason: str | None = None,
     ) -> None:
-        self.session = session
-        self.model = session.model
+        self.model = model
         if len(render_lines) != len(self.model.lines):
             raise ValueError("render rows must match the scrollback model")
         self.render_lines = render_lines
@@ -98,8 +89,6 @@ class NavigatorUI(Handler):
         self.mode = "normal"
         self.query = ""
         self.status = unavailable_reason or ""
-        self.unavailable_reason = unavailable_reason
-        self.accepted = False
         self.viewport_first: int | None = None
         self.visible_rows = 0
         self.flash_character: str | None = None
@@ -363,9 +352,7 @@ class NavigatorUI(Handler):
             return
         if key_event.matches("enter"):
             self._clear_pending_go()
-            if self.mode in ("normal", "visual"):
-                self._dispatch_key(self.bindings["accept"])
-            else:
+            if self.mode not in ("normal", "visual"):
                 self._submit()
         elif key_event.matches("escape"):
             self._clear_pending_go()
@@ -626,9 +613,6 @@ class NavigatorUI(Handler):
                 self.selection_anchor = None
                 self.selection_type = None
                 self.selection_column = None
-        elif action == "accept":
-            self._accept()
-            return
         elif action == "cancel":
             self._cancel()
             return
@@ -667,20 +651,8 @@ class NavigatorUI(Handler):
         last = min(len(self.model.lines), first + self.visible_rows)
         return range(first, last)
 
-    def _accept(self) -> None:
-        if self.unavailable_reason:
-            return
-        try:
-            self.session.accept()
-        except Exception as error:
-            self.status = f"Unable to move Kitty viewport: {error}"
-            self._draw()
-            return
-        self.accepted = True
-        self.quit_loop(0)
 
     def _cancel(self) -> None:
-        self.session.cancel()
         self.quit_loop(0)
 
 
@@ -711,7 +683,7 @@ def _kitty_shortcut(key: str) -> str | None:
 
 
 def _remote_text() -> tuple[
-    int, KittyAdapter, tuple[str, ...], tuple[str, ...], bool, int, int, int
+    tuple[str, ...], tuple[str, ...], bool, int, int
 ]:
     result = main.remote_control(
         ["ls", "--match=state:overlay_parent"], capture_output=True, check=True
@@ -735,12 +707,9 @@ def _remote_text() -> tuple[
         render_lines, first_visible, viewport_height
     )
     return (
-        window_id,
-        adapter,
         history,
         render_lines,
         bool(source.get("in_alternate_screen", False)),
-        first_visible,
         initial_row,
         viewport_height,
     )
@@ -752,33 +721,23 @@ def main(args: list[str]) -> str:
         if not acquired:
             return "already-active"
         (
-            window_id,
-            adapter,
             history,
             render_lines,
             alternate,
-            first_visible,
             initial_row,
             viewport_height,
         ) = _remote_text()
-        bottom_row = first_visible + viewport_height - 1
         model = ScrollbackModel(
             history,
             viewport_height=viewport_height,
             row=initial_row,
         )
-        session = ScrollbackSession(
-            adapter,
-            window_id=window_id,
-            model=model,
-            origin_row=bottom_row,
-        )
         ui = NavigatorUI(
-            session,
+            model,
             render_lines,
             "Alternate-screen history is unavailable; press Esc to close"
             if alternate
             else None,
         )
         Loop().loop(ui)
-        return "accepted" if ui.accepted else "cancelled"
+        return "cancelled"
