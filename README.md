@@ -1,6 +1,6 @@
 # Kitty Vim scrollback overlay
 
-<video src="demo.mp4" controls></video>
+[Watch the demo (MP4)](demo.mp4)
 
 > **WARNING:** This extension is written with the help of a Coding Agent.
 
