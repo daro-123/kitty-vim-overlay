@@ -1,5 +1,9 @@
 # Kitty Vim scrollback overlay
 
+<video src="demo.mp4" controls></video>
+
+> **WARNING:** This extension is written with the help of a Coding Agent.
+
 A Kitty custom-kitten overlay for Vim-style navigation, literal search, labeled targeting, and visual selection across Kitty scrollback rows. Scrollback rows retain Kitty's captured ANSI colors and styles; text uses Kitty's configured terminal font.
 
 ## Navigation keys
