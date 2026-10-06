@@ -4,7 +4,7 @@ import re
 
 
 _ANSI_ESCAPE = re.compile(
-    r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))"
+    r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\](?:[^\x07\x1b]|\x1b(?!\\))*(?:\x07|\x1b\\))"
 )
 
 _SEARCH_MATCH_BACKGROUND = "\x1b[48;2;70;100;140m"

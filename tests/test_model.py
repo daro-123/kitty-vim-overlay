@@ -84,6 +84,20 @@ class ScrollbackMovementTests(unittest.TestCase):
         model.move("0")
         self.assertEqual(model.column, 0)
 
+    def test_line_end_stops_at_last_non_whitespace_character(self):
+        model = self.make_model(("Checking repo details     ", "     ", "next"))
+
+        model.move("$")
+        self.assertEqual(model.column, len("Checking repo details") - 1)
+        self.assertEqual(
+            model.selected_text((0, 0), (model.row, model.column)),
+            "Checking repo details",
+        )
+
+        model.move("j")
+        model.move("$")
+        self.assertEqual((model.row, model.column), (1, 0))
+
     def test_page_and_half_page_steps_clamp_to_history_and_view_height(self):
         model = self.make_model(tuple(f"row {i}" for i in range(10)), height=4)
         model.move("<C-f>")

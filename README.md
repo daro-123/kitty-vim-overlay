@@ -9,7 +9,7 @@ A Kitty custom-kitten overlay for Vim-style navigation, literal search, labeled 
 | `h`, `j`, `k`, `l` | Move left, down, up, right |
 | Arrow keys | Move left, down, up, right |
 | `w`, `b` | Next / previous word |
-| `0`, `$` | First / last character in the row |
+| `0`, `$` | First character / last non-whitespace character in the row |
 | `gg`, `GG` | Jump to the first / last displayed scrollback row |
 | `Ctrl+f`, `PageDown` | One visible page down |
 | `Ctrl+b`, `PageUp` | One visible page up |

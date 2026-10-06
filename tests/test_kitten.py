@@ -44,6 +44,21 @@ class DisplayRowTests(unittest.TestCase):
         styled = "\x1b[34mconfig/\x1b[39m"
         self.assertEqual(styled_displayed_rows(styled), (("config/", styled),))
 
+    def test_styled_rows_preserve_text_inside_osc8_hyperlinks(self):
+        url = "https://github.com/gensimpson/elasticsearch-synonyms"
+        styled = (
+            f"\x1b]8;;{url}\x1b\\"
+            + url
+            + "\x1b]8;;\x1b\\"
+            + " is specifically formatted"
+        )
+        plain, _ = styled_displayed_rows(styled)[0]
+        self.assertEqual(plain, f"{url} is specifically formatted")
+        self.assertIn(
+            "\x1b[7mi\x1b[27m",
+            highlight_ansi_column(styled, len(url) + 1),
+        )
+
     def test_highlight_counts_visible_text_not_ansi_sequences(self):
         row = "\x1b[34mred\x1b[39m"
         self.assertEqual(

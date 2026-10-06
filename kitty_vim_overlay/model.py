@@ -49,7 +49,7 @@ class ScrollbackModel:
         elif key == "0":
             self.column = 0
         elif key == "$":
-            self.column = max(0, len(self.lines[self.row]) - 1)
+            self.column = max(0, len(self.lines[self.row].rstrip()) - 1)
         elif key == "gg":
             self._set_row(0)
         elif key == "GG":

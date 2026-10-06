@@ -10,7 +10,11 @@ from kittens.tui.handler import Handler, kitten_ui
 from kittens.tui.loop import EventType, Loop
 
 from .bindings import action_for_key, load_bindings_file
-from .instance import overlay_instance_lock
+from .instance import (
+    OVERLAY_PANEL_ID_VAR,
+    overlay_panel_id,
+    overlay_panel_lock,
+)
 from .model import ScrollbackModel
 from .search import JumpSession, JumpTarget, SearchState
 from .snapshot import (
@@ -562,7 +566,7 @@ def _kitty_shortcut(key: str) -> str | None:
 
 
 def _remote_text() -> tuple[
-    tuple[str, ...], tuple[str, ...], bool, int, int
+    tuple[str, ...], tuple[str, ...], bool, int, int, int
 ]:
     result = main.remote_control(
         ["ls", "--match=state:overlay_parent"], capture_output=True, check=True
@@ -572,6 +576,7 @@ def _remote_text() -> tuple[
         raise RuntimeError("Could not identify the Kitty window under this overlay")
     source = windows[0]
     window_id = int(source["id"])
+    panel_id = overlay_panel_id(window_id, source.get("user_vars"))
     viewport_height = int(source["lines"])
     adapter = KittyAdapter(main.remote_control, window_id)
     history_pairs = styled_displayed_rows(adapter.get_text("all", ansi=True))
@@ -591,21 +596,34 @@ def _remote_text() -> tuple[
         bool(source.get("in_alternate_screen", False)),
         initial_row,
         viewport_height,
+        panel_id,
     )
 
 
 @kitten_ui(allow_remote_control=True)
 def main(args: list[str]) -> str:
-    with overlay_instance_lock(int(os.environ["KITTY_PID"])) as acquired:
+    (
+        history,
+        render_lines,
+        alternate,
+        initial_row,
+        viewport_height,
+        panel_id,
+    ) = _remote_text()
+    main.remote_control(
+        [
+            "set-user-vars",
+            "--match=state:self",
+            f"{OVERLAY_PANEL_ID_VAR}={panel_id}",
+        ],
+        capture_output=True,
+        check=True,
+    )
+    with overlay_panel_lock(
+        int(os.environ["KITTY_PID"]), panel_id
+    ) as acquired:
         if not acquired:
-            return "already-active"
-        (
-            history,
-            render_lines,
-            alternate,
-            initial_row,
-            viewport_height,
-        ) = _remote_text()
+            return ""
         model = ScrollbackModel(
             history,
             viewport_height=viewport_height,
