@@ -223,7 +223,9 @@ def viewport_start(history: tuple[str, ...], screen: tuple[str, ...]) -> int:
                 matched = prefix_lengths[matched - 1]
     if last_start is not None:
         return last_start
-    raise ValueError("Could not align Kitty's visible screen with its retained history")
+    # Kitty's two remote-control reads can observe different live screen contents.
+    # The all-extent snapshot still ends at the screen, so use its final viewport.
+    return len(history) - len(screen)
 
 
 def last_nonempty_row(rows: tuple[str, ...]) -> int:

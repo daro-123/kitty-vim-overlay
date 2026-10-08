@@ -35,9 +35,14 @@ class DisplayRowTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "longer"):
             viewport_start(("only row",), ("row one", "row two"))
 
-    def test_viewport_alignment_fails_when_screen_text_is_not_in_history(self):
-        with self.assertRaisesRegex(ValueError, "align"):
-            viewport_start(("history",), ("other",))
+    def test_viewport_alignment_uses_latest_range_when_live_rows_changed(self):
+        self.assertEqual(
+            viewport_start(
+                ("old", "history", "screen", "rows"),
+                ("live", "changed"),
+            ),
+            2,
+        )
 
 
     def test_styled_rows_preserve_ansi_and_expose_plain_search_text(self):
