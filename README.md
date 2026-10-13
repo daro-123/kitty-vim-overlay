@@ -12,7 +12,7 @@ A Kitty custom-kitten overlay for Vim-style navigation, literal search, labeled 
 | --- | --- |
 | `h`, `j`, `k`, `l` | Move left, down, up, right |
 | Arrow keys | Move left, down, up, right |
-| `w`, `b` | Next / previous word |
+| `w`, `Ctrl+Right` / `b`, `Ctrl+Left` | Next / previous word; `2w` / `4w` move multiple words. Punctuation separates words and is skipped; `_` stays with letters and digits |
 | `0`, `$` | First character / last non-whitespace character in the row |
 | `gg`, `GG` | Jump to the first / last displayed scrollback row |
 | `Ctrl+f`, `PageDown` | One visible page down |

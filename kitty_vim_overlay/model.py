@@ -33,7 +33,10 @@ class ScrollbackModel:
     def page_size(self) -> int:
         return min(self.viewport_height, len(self.lines))
 
-    def move(self, key: str) -> None:
+    def move(self, key: str, *, count: int = 1) -> None:
+        if count < 1:
+            raise ValueError("movement count must be positive")
+
         if key == "h":
             self.column = self._clamp_column(self.row, self.column - 1)
         elif key == "l":
@@ -42,10 +45,15 @@ class ScrollbackModel:
             self._set_row(self.row + 1)
         elif key == "k":
             self._set_row(self.row - 1)
-        elif key == "w":
-            self._move_word_forward()
-        elif key == "b":
-            self._move_word_backward()
+        elif key in ("w", "b"):
+            mover = (
+                self._move_word_forward if key == "w" else self._move_word_backward
+            )
+            for _ in range(count):
+                previous = self.row, self.column
+                mover()
+                if (self.row, self.column) == previous:
+                    break
         elif key == "0":
             self.column = 0
         elif key == "$":
@@ -104,15 +112,27 @@ class ScrollbackModel:
     def _clamp_column(self, row: int, column: int) -> int:
         return min(max(column, 0), max(0, len(self.lines[row]) - 1))
 
+    @staticmethod
+    def _word_character_class(character: str) -> int:
+        if character.isalnum() or character == "_":
+            return 1
+        return 0
+
     def _move_word_forward(self) -> None:
         row, column = self.row, self.column
-        if self.lines[row] and not self.lines[row][column].isspace():
-            column += 1
-            while column < len(self.lines[row]) and not self.lines[row][column].isspace():
+        if column < len(self.lines[row]):
+            character_class = self._word_character_class(self.lines[row][column])
+            if character_class:
                 column += 1
+                while (
+                    column < len(self.lines[row])
+                    and self._word_character_class(self.lines[row][column])
+                    == character_class
+                ):
+                    column += 1
         while row < len(self.lines):
             while column < len(self.lines[row]):
-                if not self.lines[row][column].isspace():
+                if self._word_character_class(self.lines[row][column]):
                     self.row, self.column = row, column
                     return
                 column += 1
@@ -120,20 +140,16 @@ class ScrollbackModel:
             column = 0
 
     def _move_word_backward(self) -> None:
-        row, column = self.row, self.column
-        current_is_word = bool(self.lines[row]) and not self.lines[row][column].isspace()
-        if current_is_word and column > 0 and not self.lines[row][column - 1].isspace():
-            column -= 1
-            while column > 0 and not self.lines[row][column - 1].isspace():
-                column -= 1
-            self.row, self.column = row, column
-            return
-        if current_is_word:
-            column -= 1
+        row, column = self.row, self.column - 1
         while row >= 0:
             while column >= 0:
-                if not self.lines[row][column].isspace():
-                    while column > 0 and not self.lines[row][column - 1].isspace():
+                character_class = self._word_character_class(self.lines[row][column])
+                if character_class:
+                    while (
+                        column > 0
+                        and self._word_character_class(self.lines[row][column - 1])
+                        == character_class
+                    ):
                         column -= 1
                     self.row, self.column = row, column
                     return

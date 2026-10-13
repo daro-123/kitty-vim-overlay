@@ -94,8 +94,8 @@ class VimOverlayUI(Handler):
         self.flash_character: str | None = None
         self.selection_anchor: tuple[int, int] | None = None
         self.selection_type: str | None = None
-        self.selection_column: int | None = None
         self.pending_go: str | None = None
+        self.pending_count: int | None = None
 
     def initialize(self) -> None:
         self._draw()
@@ -261,14 +261,24 @@ class VimOverlayUI(Handler):
             elif self.mode == "jump_character":
                 self._set_character_targets(char)
             else:
+                if (
+                    self.mode in ("normal", "visual")
+                    and char.isdigit()
+                    and (char != "0" or self.pending_count is not None)
+                ):
+                    digit = int(char)
+                    self.pending_count = (
+                        digit
+                        if self.pending_count is None
+                        else self.pending_count * 10 + digit
+                    )
+                    continue
                 code = ord(char)
                 key = f"<C-{chr(code + 96)}>" if 1 <= code <= 26 else char
                 if self.mode in ("normal", "visual"):
                     self._dispatch_sequence_key(key)
                 else:
                     self._dispatch_key(key)
-
-
     def _dispatch_sequence_key(self, key: str) -> None:
         pending = self.pending_go
         self.pending_go = None
@@ -330,6 +340,14 @@ class VimOverlayUI(Handler):
             elif pending_go:
                 self._draw()
         elif self.mode in ("normal", "visual"):
+            for shortcut, action in (
+                ("ctrl+left", "word_backward"),
+                ("ctrl+right", "word_forward"),
+            ):
+                if key_event.matches(shortcut):
+                    self._clear_pending_go()
+                    self._dispatch_key(self.bindings[action])
+                    return
             for shortcut, action in _ARROW_ACTIONS:
                 if key_event.matches(shortcut):
                     self._clear_pending_go()
@@ -346,7 +364,6 @@ class VimOverlayUI(Handler):
                     self._clear_pending_go()
                     self._dispatch_key(configured_key)
                     return
-
     def on_eot(self) -> None:
         self._dispatch_key(self.bindings["half_page_down"])
 
@@ -362,7 +379,10 @@ class VimOverlayUI(Handler):
             return
         action = action_for_key(key, self.bindings)
         if action is None:
+            self.pending_count = None
             return
+        count = self.pending_count or 1
+        self.pending_count = None
 
         movement = {
             "move_left": "h",
@@ -386,7 +406,10 @@ class VimOverlayUI(Handler):
                         if self.selection_column is not None
                         else self.model.column
                     )
-                    self.model.move(movement[action])
+                    movement_count = (
+                        count if action in ("word_forward", "word_backward") else 1
+                    )
+                    self.model.move(movement[action], count=movement_count)
                     self.model.column = min(
                         desired_column,
                         max(0, len(self.model.lines[self.model.row]) - 1),
@@ -407,10 +430,15 @@ class VimOverlayUI(Handler):
                         max(0, len(self.model.lines[self.model.row]) - 1),
                     )
                 else:
-                    self.model.move(movement[action])
-                    self.selection_column = self.model.column
+                    movement_count = (
+                        count if action in ("word_forward", "word_backward") else 1
+                    )
+                    self.model.move(movement[action], count=movement_count)
             else:
-                self.model.move(movement[action])
+                movement_count = (
+                    count if action in ("word_forward", "word_backward") else 1
+                )
+                self.model.move(movement[action], count=movement_count)
             self.status = ""
         elif action in ("search_forward", "search_backward"):
             self.selection_anchor = None

@@ -34,6 +34,62 @@ class ScrollbackMovementTests(unittest.TestCase):
         model.move("b")
         self.assertEqual((model.row, model.column), (0, 4))
 
+
+    def test_word_motion_skips_punctuation_between_keyword_words(self):
+        model = self.make_model(("foo/bar-baz",))
+
+        for column in (4, 8):
+            model.move("w")
+            self.assertEqual(model.column, column)
+
+        for column in (4, 0):
+            model.move("b")
+            self.assertEqual(model.column, column)
+
+    def test_word_motion_skips_all_punctuation_and_keeps_underscore(self):
+        model = self.make_model(("alpha!@#$beta",))
+        model.move("w")
+        self.assertEqual(model.column, 9)
+        model.move("b")
+        self.assertEqual(model.column, 0)
+
+        model = self.make_model(("foo_bar::baz",))
+        model.move("w")
+        self.assertEqual(model.column, 9)
+
+
+    def test_word_motion_skips_separators_in_a_path(self):
+        text = (
+            "/home/daro/Documents/crosswired-common/modules/apps/"
+            "cw-frontend/cw-vue-component-library"
+        )
+        model = self.make_model((text,))
+
+        for word in (
+            "home", "daro", "Documents", "crosswired", "common", "modules",
+            "apps", "cw", "frontend", "cw", "vue", "component", "library",
+        ):
+            model.move("w")
+            self.assertTrue(text.startswith(word, model.column))
+
+        for word in (
+            "component", "vue", "cw", "frontend", "cw", "apps", "modules",
+            "common", "crosswired", "Documents", "daro", "home",
+        ):
+            model.move("b")
+            self.assertTrue(text.startswith(word, model.column))
+    def test_word_motion_accepts_a_count(self):
+        model = self.make_model(("one two three four five",))
+
+        model.move("w", count=2)
+        self.assertEqual(model.column, 8)
+        model.move("w", count=2)
+        self.assertEqual(model.column, 19)
+        model.move("b", count=2)
+        self.assertEqual(model.column, 8)
+        model.move("b", count=2)
+        self.assertEqual(model.column, 0)
+
     def test_movement_stops_at_last_nonblank_row_but_keeps_internal_blank_rows(self):
         model = self.make_model(("first", "", "last", "", ""), row=1)
 
