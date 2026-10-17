@@ -7,6 +7,19 @@ _ANSI_ESCAPE = re.compile(
     r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\](?:[^\x07\x1b]|\x1b(?!\\))*(?:\x07|\x1b\\))"
 )
 
+_CURSOR_POSITION = re.compile(r"\x1b\[(\d+);(\d+)H")
+
+
+def extract_cursor_position(text: str) -> tuple[str, int, int] | None:
+    """Return screen text and zero-based cursor coordinates from Kitty's marker."""
+    matches = tuple(_CURSOR_POSITION.finditer(text))
+    if not matches:
+        return None
+    match = matches[-1]
+    return text[: match.start()], max(0, int(match.group(1)) - 1), max(
+        0, int(match.group(2)) - 1
+    )
+
 _SEARCH_MATCH_BACKGROUND = "\x1b[48;2;70;100;140m"
 _CURRENT_SEARCH_MATCH_BACKGROUND = "\x1b[48;2;255;193;7m"
 

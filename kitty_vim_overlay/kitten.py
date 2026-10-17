@@ -22,6 +22,7 @@ from .snapshot import (
     flash_ansi_line,
     highlight_ansi_matches,
     highlight_ansi_range,
+    extract_cursor_position,
     last_nonempty_row,
     pad_history_to_viewport,
     styled_displayed_rows,
@@ -55,7 +56,9 @@ class KittyAdapter:
         self.remote_control = remote_control
         self.window_id = window_id
 
-    def get_text(self, extent: str, *, ansi: bool = False) -> str:
+    def get_text(
+        self, extent: str, *, ansi: bool = False, cursor: bool = False
+    ) -> str:
         command = [
             "get-text",
             f"--match=id:{self.window_id}",
@@ -64,6 +67,8 @@ class KittyAdapter:
         ]
         if ansi:
             command.append("--ansi")
+        if cursor:
+            command.append("--add-cursor")
         result = self.remote_control(command, capture_output=True, check=True)
         return result.stdout.decode("utf-8")
 
@@ -594,7 +599,7 @@ def _kitty_shortcut(key: str) -> str | None:
 
 
 def _remote_text() -> tuple[
-    tuple[str, ...], tuple[str, ...], bool, int, int, int
+    tuple[str, ...], tuple[str, ...], bool, int, int, int, int, int
 ]:
     result = main.remote_control(
         ["ls", "--match=state:overlay_parent"], capture_output=True, check=True
@@ -608,12 +613,23 @@ def _remote_text() -> tuple[
     viewport_height = int(source["lines"])
     adapter = KittyAdapter(main.remote_control, window_id)
     history_pairs = styled_displayed_rows(adapter.get_text("all", ansi=True))
-    screen_pairs = styled_displayed_rows(adapter.get_text("screen", ansi=True))
     history = tuple(plain for plain, _ in history_pairs)
     render_lines = tuple(styled for _, styled in history_pairs)
-    screen = tuple(plain for plain, _ in screen_pairs)
+    screen_text = adapter.get_text("screen", ansi=True, cursor=True)
+    cursor = extract_cursor_position(screen_text)
+    if cursor is None:
+        screen_text = adapter.get_text("screen", ansi=True)
+        screen_row = last_nonempty_row(
+            tuple(plain for plain, _ in styled_displayed_rows(screen_text))
+        )
+        screen_column = 0
+    else:
+        screen_text, screen_row, screen_column = cursor
+    screen = tuple(plain for plain, _ in styled_displayed_rows(screen_text))
+    history = pad_history_to_viewport(history, 0, len(screen))
+    render_lines = pad_history_to_viewport(render_lines, 0, len(screen))
     first_visible = viewport_start(history, screen)
-    initial_row = first_visible + last_nonempty_row(screen)
+    initial_row = first_visible + screen_row
     history = pad_history_to_viewport(history, first_visible, viewport_height)
     render_lines = pad_history_to_viewport(
         render_lines, first_visible, viewport_height
@@ -623,7 +639,9 @@ def _remote_text() -> tuple[
         render_lines,
         bool(source.get("in_alternate_screen", False)),
         initial_row,
+        screen_column,
         viewport_height,
+        first_visible,
         panel_id,
     )
 
@@ -635,7 +653,9 @@ def main(args: list[str]) -> str:
         render_lines,
         alternate,
         initial_row,
+        initial_column,
         viewport_height,
+        initial_viewport_first,
         panel_id,
     ) = _remote_text()
     main.remote_control(
@@ -656,6 +676,7 @@ def main(args: list[str]) -> str:
             history,
             viewport_height=viewport_height,
             row=initial_row,
+            column=initial_column,
         )
         ui = VimOverlayUI(
             model,
@@ -664,5 +685,7 @@ def main(args: list[str]) -> str:
             if alternate
             else None,
         )
+        ui.viewport_first = initial_viewport_first
+        ui.visible_rows = max(1, viewport_height - 1)
         Loop().loop(ui)
         return "cancelled"

@@ -8,6 +8,7 @@ from kitty_vim_overlay.snapshot import (
     highlight_ansi_column,
     highlight_ansi_matches,
     highlight_ansi_range,
+    extract_cursor_position,
     last_nonempty_row,
     pad_history_to_viewport,
     strip_ansi,
@@ -18,6 +19,16 @@ from kitty_vim_overlay.snapshot import (
 
 
 class DisplayRowTests(unittest.TestCase):
+
+    def test_extracts_cursor_position_and_removes_kitty_marker(self):
+        self.assertEqual(
+            extract_cursor_position("first\r\nsecond\x1b[?25h\x1b[2;4H"),
+            ("first\r\nsecond\x1b[?25h", 1, 3),
+        )
+
+    def test_missing_cursor_marker_returns_none(self):
+        self.assertIsNone(extract_cursor_position("first\r\nsecond"))
+
     def test_displayed_rows_preserve_wrapped_rows_and_remove_trailing_separator(self):
         self.assertEqual(
             displayed_rows("before\rwrapped-part\r\nnext\n"),
@@ -133,6 +144,13 @@ class DisplayRowTests(unittest.TestCase):
         self.assertEqual(strip_ansi(rendered), "aa[a][s]")
 
 class ViewportLayoutTests(unittest.TestCase):
+    def test_history_padding_covers_empty_screen_rows(self):
+        history = pad_history_to_viewport(("prompt",), 0, 4)
+
+        self.assertEqual(history, ("prompt", "", "", ""))
+        self.assertEqual(viewport_start(history, ("prompt", "", "", "")), 0)
+
+
     def test_selection_inside_displayed_rows_keeps_viewport_fixed(self):
         self.assertEqual(
             viewport_first_row(16, 50, 10, previous_first=10, previous_visible=10),
